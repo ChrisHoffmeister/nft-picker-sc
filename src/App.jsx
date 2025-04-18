@@ -3,15 +3,13 @@ import { ethers } from 'ethers';
 import './style.css';
 
 // ABIs
+const nftContractABI = ["function getTokenIds() view returns (uint256[])"];
 const winnerRegistryABI = [
-  "function getWinners(address nftContract) view returns (uint256[])",
-  "function storeWinners(address nftContract, uint256[] calldata tokenIds) public"
-];
-const nftContractABI = [
-  "function getTokenIds() view returns (uint256[])"
+  "function getWinners() view returns (uint256[])",
+  "function storeWinners(uint256[] calldata tokenIds) public"
 ];
 
-// Winner Smart Contract (neu strukturierter Contract!)
+// Winner Smart Contract (immer gleich!)
 const winnerContractAddress = "0x5884711d09B97fb4F519ABd0910d77914FFa9730";
 const provider = new ethers.JsonRpcProvider("https://polygon-rpc.com");
 
@@ -26,9 +24,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [tokenImages, setTokenImages] = useState({});
 
+  // Fetch used IDs from WinnerContract, filtered by available tokens
   const fetchUsedTokenIds = async (nftAddress) => {
     const winnerContract = new ethers.Contract(winnerContractAddress, winnerRegistryABI, provider);
-    const winners = await winnerContract.getWinners(nftAddress);
+    const winners = await winnerContract.getWinners();
 
     const nftContract = new ethers.Contract(nftAddress, nftContractABI, provider);
     const available = await nftContract.getTokenIds();
@@ -39,6 +38,7 @@ export default function App() {
     setAvailableTokenIds(available.map(id => id.toString()));
   };
 
+  // Load token image
   const loadTokenImage = async (contractAddress, tokenId) => {
     try {
       const metadataUrl = `https://ipfs.io/ipfs/${contractAddress}/${tokenId}.json`; // Beispielstruktur!
@@ -50,6 +50,7 @@ export default function App() {
     }
   };
 
+  // Apply new NFT contract
   const applyContract = async () => {
     setNftContractAddress(inputAddress);
     setCurrentDraw([]);
@@ -65,6 +66,7 @@ export default function App() {
     }
   };
 
+  // Draw 4 random winners
   const drawWinners = async () => {
     if (!nftContractAddress) {
       alert("Please enter an NFT contract address first.");
@@ -102,8 +104,8 @@ export default function App() {
       const signer = await signerProvider.getSigner();
       const winnerContract = new ethers.Contract(winnerContractAddress, winnerRegistryABI, signer);
 
-      // Store winners with NFT contract address
-      const tx = await winnerContract.storeWinners(nftContractAddress, selected);
+      // Store on-chain
+      const tx = await winnerContract.storeWinners(selected);
       await tx.wait();
       setTxHash(tx.hash);
 
@@ -130,6 +132,7 @@ export default function App() {
     setLoading(false);
   };
 
+  // Calculate progress
   const progress = availableTokenIds.length > 0
     ? Math.min((usedTokenIds.length / availableTokenIds.length) * 100, 100)
     : 0;
