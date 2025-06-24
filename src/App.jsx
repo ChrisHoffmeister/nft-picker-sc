@@ -1,100 +1,65 @@
-import { useState, useEffect } from 'react';
-import './style.css';
+import React, { useState } from "react";
+import axios from "axios";
+import "./style.css";
 
-export default function App() {
-  const [contractAddress, setContractAddress] = useState('');
-  const [winners, setWinners] = useState([]);
-  const [error, setError] = useState(null);
+function App() {
+  const [nftContract, setNftContract] = useState("");
+  const [status, setStatus] = useState("");
   const [txHash, setTxHash] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [winners, setWinners] = useState([]);
 
-  const fetchWinners = async (contract) => {
-    if (!contract) return;
+  const pickWinner = async () => {
+    setStatus("Ziehung läuft...");
     try {
-      const res = await fetch(`/api/winners.js?contract=${contract}`);
-      const data = await res.json();
-      if (res.ok) {
-        setWinners(data.winners || []);
-      } else {
-        throw new Error(data.error || 'Fehler beim Abrufen der Gewinner');
-      }
+      const res = await axios.post("/api/pick-winner", { nftContract });
+      setTxHash(res.data.txHash);
+      fetchWinners(); // Reload list
+      setStatus(`🎉 Token ID ${res.data.tokenId} gespeichert!`);
     } catch (err) {
-      console.error(err);
-      setWinners([]);
+      setStatus("❌ " + (err.response?.data?.error || err.message));
     }
   };
 
-  const handlePickWinner = async () => {
-    setError(null);
-    setTxHash(null);
-    setLoading(true);
-
+  const fetchWinners = async () => {
+    if (!nftContract) return;
     try {
-      const res = await fetch('/api/pick-winner.js', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ contractAddress })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Unbekannter Fehler');
-
-      setTxHash(data.txHash);
-      fetchWinners(contractAddress); // Aktualisiere die Gewinnerliste
+      const res = await axios.get(`/api/winners?nftContract=${nftContract}`);
+      setWinners(res.data.winners || []);
     } catch (err) {
-      setError(err.message);
+      console.error("Fehler beim Laden der Gewinner", err);
     }
-
-    setLoading(false);
   };
-
-  useEffect(() => {
-    fetchWinners(contractAddress);
-  }, [contractAddress]);
 
   return (
     <div className="container">
       <h1>3member.me Draw</h1>
-
       <input
         type="text"
-        placeholder="NFT Contract Address"
-        value={contractAddress}
-        onChange={(e) => setContractAddress(e.target.value)}
+        placeholder="0x123…"
+        value={nftContract}
+        onChange={(e) => setNftContract(e.target.value)}
       />
-
-      <button onClick={handlePickWinner} disabled={!contractAddress || loading}>
-        {loading ? 'Drawing…' : 'Pick Winner'}
-      </button>
-
-      {error && <p style={{ color: 'red', marginTop: '1rem' }}>❌ {error}</p>}
+      <button onClick={pickWinner}>Pick Winner</button>
+      <p style={{ color: status.startsWith("❌") ? "red" : "green" }}>{status}</p>
       {txHash && (
-        <p style={{ marginTop: '1rem' }}>
-          ✅ Gewinner gespeichert: <br />
-          <a
-            href={`https://polygonscan.com/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {txHash}
-          </a>
+        <p>
+          🔗 <a href={`https://polygonscan.com/tx/${txHash}`} target="_blank" rel="noreferrer">Zur Transaktion</a>
         </p>
       )}
-
       <hr />
-
       <h2>Gewinnerhistorie</h2>
-      {winners.length > 0 ? (
+      {winners.length === 0 ? (
+        <p>Keine bisherigen Gewinner</p>
+      ) : (
         <ul>
-          {winners.map((id, idx) => (
-            <li key={idx}>🎉 Token ID: {id}</li>
+          {winners.map((id, i) => (
+            <li key={i}>Token ID: {id}</li>
           ))}
         </ul>
-      ) : (
-        <p>Keine bisherigen Gewinner</p>
       )}
     </div>
   );
 }
+
+export default App;
+
