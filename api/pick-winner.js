@@ -3,9 +3,7 @@ import { ethers } from 'ethers';
 const winnerContractAddress = "0x43e4Ff40ce09BB9Df38a815be2D5e26Bba50D035";
 
 const winnerContractABI = [
-  "function storeWinners(uint256[] calldata tokenIds) public",
-  "function getWinners() public view returns (uint256[])",
-  "function hasAlreadyWon(uint256 tokenId) public view returns (bool)",
+  "function storeWinner(address nftContract, uint256 tokenId) public",
 ];
 
 export default async function handler(req, res) {
@@ -14,10 +12,10 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { tokenIds } = req.body;
+  const { contractAddress, tokenIds } = req.body;
 
-  if (!Array.isArray(tokenIds) || tokenIds.length === 0) {
-    res.status(400).json({ error: 'tokenIds ist erforderlich' });
+  if (!contractAddress || !Array.isArray(tokenIds) || tokenIds.length === 0) {
+    res.status(400).json({ error: 'contractAddress und tokenIds erforderlich' });
     return;
   }
 
@@ -26,10 +24,15 @@ export default async function handler(req, res) {
     const signer = await signerProvider.getSigner();
     const winnerContract = new ethers.Contract(winnerContractAddress, winnerContractABI, signer);
 
-    const tx = await winnerContract.storeWinners(tokenIds);
-    await tx.wait();
+    // jeden Token einzeln speichern
+    const txs = [];
+    for (const tokenId of tokenIds) {
+      const tx = await winnerContract.storeWinner(contractAddress, tokenId);
+      await tx.wait();
+      txs.push(tx.hash);
+    }
 
-    res.status(200).json({ message: 'Gewinner gespeichert', txHash: tx.hash });
+    res.status(200).json({ message: 'Alle Gewinner gespeichert', txHashes: txs });
   } catch (error) {
     console.error('Fehler beim Speichern der Gewinner:', error);
     res.status(500).json({ error: error.message });
