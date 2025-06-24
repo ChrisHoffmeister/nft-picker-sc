@@ -1,63 +1,94 @@
-import { useState } from "react";
-import "./style.css";
+import React, { useState, useEffect } from 'react';
+import './style.css';
 
 export default function App() {
-  const [nftContract, setNftContract] = useState("");
+  const [contractAddress, setContractAddress] = useState('');
   const [winner, setWinner] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [txHash, setTxHash] = useState(null);
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [winnersList, setWinnersList] = useState([]);
 
-  const pick = async () => {
-    if (!nftContract) return;
-    setBusy(true);
+  const handlePickWinner = async () => {
+    setLoading(true);
     setError(null);
+    setWinner(null);
+    setTxHash(null);
+
     try {
-      const res = await fetch("/api/pick-winner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nftContract }),
+      const res = await fetch('/api/pick-winner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nftContract: contractAddress }),
       });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+
+      if (!res.ok) throw new Error(data.error || 'Draw failed');
+
       setWinner(data.tokenId);
-      loadHistory();
-    } catch (e) {
-      setError(e.message);
+      setTxHash(data.txHash);
+      fetchWinners(); // Reload after storing winner
+    } catch (err) {
+      setError(err.message);
     }
-    setBusy(false);
+
+    setLoading(false);
   };
 
-  const loadHistory = async () => {
+  const fetchWinners = async () => {
+    if (!contractAddress) return;
     try {
-      const res = await fetch(`/api/winners?nftContract=${nftContract}`);
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
-      setHistory(d.winners);
-    } catch (e) {
-      setError(e.message);
+      const res = await fetch(`/api/winners?nftContract=${contractAddress}`);
+      const data = await res.json();
+      setWinnersList(data.winners);
+    } catch (err) {
+      console.error('Fehler beim Abrufen der Gewinner:', err);
     }
   };
 
   return (
     <div className="container">
-      <h1>3member.me Draw</h1>
+      <h1>Draw Random NFT Winner</h1>
+
       <input
         type="text"
-        placeholder="NFT Contract Adresse"
-        value={nftContract}
-        onChange={(e) => setNftContract(e.target.value)}
+        placeholder="NFT Contract Adresse eingeben"
+        value={contractAddress}
+        onChange={(e) => setContractAddress(e.target.value)}
       />
-      <button onClick={pick} disabled={busy}>
-        {busy ? "Ziehen…" : "Pick Winner"}
-      </button>
-      {winner && <p>🎉 Gewinner: {winner}</p>}
-      {error && <p style={{ color: "red" }}>❌ {error}</p>}
 
-      <hr />
-      <h2>Gewinnerhistorie</h2>
-      {history.length === 0 && <p>Keine bisherigen Gewinner</p>}
-      <ul>{history.map((id) => <li key={id}>#{id}</li>)}</ul>
+      <button onClick={handlePickWinner} disabled={loading || !contractAddress}>
+        {loading ? 'Ziehe Gewinner...' : 'Zufälligen Gewinner ziehen'}
+      </button>
+
+      {txHash && (
+        <p>
+          ✅ Gespeichert auf-chain:{" "}
+          <a
+            href={`https://polygonscan.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {txHash}
+          </a>
+        </p>
+      )}
+
+      {winner && (
+        <p>🎉 Gewinner Token ID: <strong>{winner}</strong></p>
+      )}
+
+      {error && <p style={{ color: 'red' }}>❌ {error}</p>}
+
+      <h2>Bisher gezogene Gewinner</h2>
+      <ul>
+        {winnersList.map((id, i) => (
+          <li key={i}>Token ID: {id}</li>
+        ))}
+      </ul>
     </div>
   );
 }
