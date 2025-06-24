@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-const winnerContractAddress = "0x5884711d09B97fb4F519ABd0910d77914FFa9730"; // Dein WinnerDraw3me Contract
+const winnerContractAddress = "0x43e4Ff40ce09BB9Df38a815be2D5e26Bba50D035";
 
 const winnerContractABI = [
   "function storeWinners(uint256[] calldata tokenIds) public",
@@ -22,7 +22,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const provider = new ethers.JsonRpcProvider("https://polygon-rpc.com");
     const signerProvider = new ethers.BrowserProvider(window.ethereum);
     const signer = await signerProvider.getSigner();
     const winnerContract = new ethers.Contract(winnerContractAddress, winnerContractABI, signer);
