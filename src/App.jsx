@@ -1,32 +1,41 @@
-import React, { useState } from "react";
-import axios from "axios";
+import { useState } from "react";
 import "./style.css";
 
-function App() {
+export default function App() {
   const [nftContract, setNftContract] = useState("");
-  const [status, setStatus] = useState("");
-  const [txHash, setTxHash] = useState(null);
-  const [winners, setWinners] = useState([]);
+  const [winner, setWinner] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const pickWinner = async () => {
-    setStatus("Ziehung läuft...");
+  const pick = async () => {
+    if (!nftContract) return;
+    setBusy(true);
+    setError(null);
     try {
-      const res = await axios.post("/api/pick-winner", { nftContract });
-      setTxHash(res.data.txHash);
-      fetchWinners(); // Reload list
-      setStatus(`🎉 Token ID ${res.data.tokenId} gespeichert!`);
-    } catch (err) {
-      setStatus("❌ " + (err.response?.data?.error || err.message));
+      const res = await fetch("/api/pick-winner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nftContract }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setWinner(data.tokenId);
+      loadHistory();
+    } catch (e) {
+      setError(e.message);
     }
+    setBusy(false);
   };
 
-  const fetchWinners = async () => {
-    if (!nftContract) return;
+  const loadHistory = async () => {
     try {
-      const res = await axios.get(`/api/winners?nftContract=${nftContract}`);
-      setWinners(res.data.winners || []);
-    } catch (err) {
-      console.error("Fehler beim Laden der Gewinner", err);
+      const res = await fetch(`/api/winners?nftContract=${nftContract}`);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      setHistory(d.winners);
+    } catch (e) {
+      setError(e.message);
     }
   };
 
@@ -35,31 +44,20 @@ function App() {
       <h1>3member.me Draw</h1>
       <input
         type="text"
-        placeholder="0x123…"
+        placeholder="NFT Contract Adresse"
         value={nftContract}
         onChange={(e) => setNftContract(e.target.value)}
       />
-      <button onClick={pickWinner}>Pick Winner</button>
-      <p style={{ color: status.startsWith("❌") ? "red" : "green" }}>{status}</p>
-      {txHash && (
-        <p>
-          🔗 <a href={`https://polygonscan.com/tx/${txHash}`} target="_blank" rel="noreferrer">Zur Transaktion</a>
-        </p>
-      )}
+      <button onClick={pick} disabled={busy}>
+        {busy ? "Ziehen…" : "Pick Winner"}
+      </button>
+      {winner && <p>🎉 Gewinner: {winner}</p>}
+      {error && <p style={{ color: "red" }}>❌ {error}</p>}
+
       <hr />
       <h2>Gewinnerhistorie</h2>
-      {winners.length === 0 ? (
-        <p>Keine bisherigen Gewinner</p>
-      ) : (
-        <ul>
-          {winners.map((id, i) => (
-            <li key={i}>Token ID: {id}</li>
-          ))}
-        </ul>
-      )}
+      {history.length === 0 && <p>Keine bisherigen Gewinner</p>}
+      <ul>{history.map((id) => <li key={id}>#{id}</li>)}</ul>
     </div>
   );
 }
-
-export default App;
-
