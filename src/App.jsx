@@ -1,63 +1,99 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './style.css';
 
 export default function App() {
-  const [nftContract, setNftContract] = useState('');
-  const [txHash, setTxHash] = useState('');
-  const [winner, setWinner] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [error, setError] = useState('');
+  const [contractAddress, setContractAddress] = useState('');
+  const [winners, setWinners] = useState([]);
+  const [error, setError] = useState(null);
+  const [txHash, setTxHash] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const pickWinner = async () => {
-    setError('');
+  const fetchWinners = async (contract) => {
+    if (!contract) return;
     try {
-      const res = await fetch('/api/pick-winner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nftContract })
-      });
+      const res = await fetch(`/api/winners.js?contract=${contract}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setTxHash(data.txHash);
-      setWinner(data.tokenId);
-      fetchWinners(nftContract);
+      if (res.ok) {
+        setWinners(data.winners || []);
+      } else {
+        throw new Error(data.error || 'Fehler beim Abrufen der Gewinner');
+      }
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setWinners([]);
     }
   };
 
-  const fetchWinners = async (address) => {
-    const res = await fetch(`/api/winners?nftContract=${address}`);
-    const data = await res.json();
-    setHistory(data.winners || []);
+  const handlePickWinner = async () => {
+    setError(null);
+    setTxHash(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/pick-winner.js', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ contractAddress })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unbekannter Fehler');
+
+      setTxHash(data.txHash);
+      fetchWinners(contractAddress); // Aktualisiere die Gewinnerliste
+    } catch (err) {
+      setError(err.message);
+    }
+
+    setLoading(false);
   };
+
+  useEffect(() => {
+    fetchWinners(contractAddress);
+  }, [contractAddress]);
 
   return (
     <div className="container">
       <h1>3member.me Draw</h1>
-      <input
-        placeholder="NFT Contract Address"
-        value={nftContract}
-        onChange={(e) => setNftContract(e.target.value)}
-      />
-      <button onClick={pickWinner}>Pick Winner</button>
 
+      <input
+        type="text"
+        placeholder="NFT Contract Address"
+        value={contractAddress}
+        onChange={(e) => setContractAddress(e.target.value)}
+      />
+
+      <button onClick={handlePickWinner} disabled={!contractAddress || loading}>
+        {loading ? 'Drawing…' : 'Pick Winner'}
+      </button>
+
+      {error && <p style={{ color: 'red', marginTop: '1rem' }}>❌ {error}</p>}
       {txHash && (
-        <p>✅ <a href={`https://polygonscan.com/tx/${txHash}`} target="_blank" rel="noreferrer">Transaction saved</a></p>
+        <p style={{ marginTop: '1rem' }}>
+          ✅ Gewinner gespeichert: <br />
+          <a
+            href={`https://polygonscan.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {txHash}
+          </a>
+        </p>
       )}
-      {winner && <p>🎉 Gewinner Token ID: {winner}</p>}
-      {error && <p style={{ color: 'red' }}>❌ {error}</p>}
 
       <hr />
-      <h3>Gewinnerhistorie</h3>
-      {history.length === 0 ? (
-        <p>Keine bisherigen Gewinner</p>
-      ) : (
+
+      <h2>Gewinnerhistorie</h2>
+      {winners.length > 0 ? (
         <ul>
-          {history.map((id, i) => (
-            <li key={i}>Token ID: {id}</li>
+          {winners.map((id, idx) => (
+            <li key={idx}>🎉 Token ID: {id}</li>
           ))}
         </ul>
+      ) : (
+        <p>Keine bisherigen Gewinner</p>
       )}
     </div>
   );
