@@ -1,41 +1,40 @@
 import { useState } from 'react';
-import './style.css';
 
 export default function App() {
   const [contractAddress, setContractAddress] = useState('');
-  const [tokenIds, setTokenIds] = useState('');
-  const [txHashes, setTxHashes] = useState([]);
-  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const [winners, setWinners] = useState([]);
+  const [error, setError] = useState('');
+
+  const fetchWinners = async () => {
+    try {
+      const res = await fetch(`/api/winners?nftContract=${contractAddress}`);
+      const data = await res.json();
+      if (res.ok) setWinners(data.winners);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handlePick = async () => {
     setLoading(true);
-    setError(null);
-    setTxHashes([]);
+    setError('');
+    setWinner(null);
 
     try {
-      const idArray = tokenIds
-        .split(',')
-        .map((id) => id.trim())
-        .filter((id) => id !== '')
-        .map((id) => Number(id));
-
       const res = await fetch('/api/pick-winner', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contractAddress,
-          tokenIds: idArray
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nftContract: contractAddress }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || 'Unknown error');
+      if (!res.ok) throw new Error(data.error);
 
-      setTxHashes(data.txHashes);
+      setWinner(data);
+      await fetchWinners();
     } catch (err) {
       setError(err.message);
     }
@@ -45,48 +44,57 @@ export default function App() {
 
   return (
     <div className="container">
-      <h1>Pick a Random NFTs from 3member.me events </h1>
+      <h1>3member.me Draw</h1>
 
       <input
         type="text"
         placeholder="NFT Contract Address"
         value={contractAddress}
         onChange={(e) => setContractAddress(e.target.value)}
-        style={{ width: '100%', padding: '0.8rem', marginBottom: '1rem' }}
+        style={{ width: '100%', marginBottom: '1rem' }}
       />
 
-      <textarea
-        rows="3"
-        placeholder="Token IDs (e.g. 1,2,3)"
-        value={tokenIds}
-        onChange={(e) => setTokenIds(e.target.value)}
-        style={{ width: '100%', padding: '0.8rem', marginBottom: '1rem' }}
-      />
-
-      <button onClick={handlePick} disabled={loading || !contractAddress || !tokenIds}>
-        {loading ? 'Picking…' : 'Pick 3 Players'}
+      <button onClick={handlePick} disabled={loading || !contractAddress}>
+        {loading ? 'Zieht...' : 'Pick Winner'}
       </button>
 
-      {txHashes.length > 0 && (
+      {error && <p style={{ color: 'red' }}>❌ {error}</p>}
+
+      {winner && (
         <div style={{ marginTop: '1rem' }}>
-          ✅ Transaction(s) saved:
-          <ul>
-            {txHashes.map((hash, idx) => (
-              <li key={idx}>
-                <a
-                  href={`https://polygonscan.com/tx/${hash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {hash}
-                </a>
-              </li>
-            ))}
-          </ul>
+          ✅ Gewinner: Token #{winner.tokenId}
+          <br />
+          <a
+            href={`https://polygonscan.com/tx/${winner.txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View Transaction
+          </a>
         </div>
       )}
 
-      {error && <p style={{ color: 'red', marginTop: '1rem' }}>❌ {error}</p>}
+      <hr style={{ margin: '2rem 0' }} />
+
+      <h3>Gewinnerhistorie</h3>
+      {winners.length === 0 ? (
+        <p>Keine bisherigen Gewinner</p>
+      ) : (
+        <ul>
+          {winners.map((id, i) => (
+            <li key={i}>
+              Token #{id} –{' '}
+              <a
+                href={`https://rarible.com/token/${contractAddress}:${id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Rarible Link
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
