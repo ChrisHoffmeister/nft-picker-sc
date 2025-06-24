@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Token-IDs abrufen
+    // Hole NFTs aus der Collection von Rarible
     const response = await axios.get(
       `https://api.rarible.org/v0.1/items/byCollection?collection=${nftContract}&size=100`
     );
@@ -30,10 +30,9 @@ export default async function handler(req, res) {
       .map((item) => parseInt(item.tokenId, 10))
       .filter((id) => !isNaN(id));
 
-    // 2. Zufällige ID auswählen
-    const randomTokenId = tokenIds[Math.floor(Math.random() * tokenIds.length)];
+    const randomTokenId =
+      tokenIds[Math.floor(Math.random() * tokenIds.length)];
 
-    // 3. On-chain speichern
     const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
     const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
@@ -41,17 +40,15 @@ export default async function handler(req, res) {
     const tx = await contract.storeWinner(nftContract, randomTokenId);
     await tx.wait();
 
-    // 4. Erfolg
     return res.status(200).json({
       success: true,
       tokenId: randomTokenId,
       txHash: tx.hash,
     });
   } catch (err) {
-    console.error("❌ Fehler bei der Ziehung:", err);
-    return res.status(500).json({
-      error: "Serverfehler",
-      details: err?.message || "Unbekannter Fehler",
-    });
+    console.error("Fehler bei der Ziehung:", err);
+    return res
+      .status(500)
+      .json({ error: "Fehler bei Ziehung", details: err.message });
   }
 }
