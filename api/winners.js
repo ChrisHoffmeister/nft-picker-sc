@@ -13,9 +13,9 @@ export default async function handler(req, res) {
     const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
     const winners = await contract.getWinners(nftContract);
-    res.status(200).json({ winners: winners.map((w) => w.toString()) });
+    res.status(200).json({ winners: winners.map(w => w.toString()) });
   } catch (err) {
     console.error("Fehler beim Abrufen:", err);
-    res.status(500).json({ error: "Fetch failed", details: err.message });
+    res.status(500).json({ error: err.message || "Unbekannter Fehler" });
   }
 }
