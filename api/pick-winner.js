@@ -1,40 +1,60 @@
 import { ethers } from 'ethers';
 
-const winnerContractAddress = "0x43e4Ff40ce09BB9Df38a815be2D5e26Bba50D035";
-
-const winnerContractABI = [
+const DRAW_CONTRACT_ADDRESS = "0x43e4Ff40ce09BB9Df38a815be2D5e26Bba50D035";
+const DRAW_CONTRACT_ABI = [
+  "function hasAlreadyWon(address nftContract, uint256 tokenId) public view returns (bool)",
   "function storeWinner(address nftContract, uint256 tokenId) public",
 ];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Nur POST erlaubt' });
-    return;
+    return res.status(405).json({ error: 'Nur POST erlaubt' });
   }
 
-  const { contractAddress, tokenIds } = req.body;
+  const { nftContract } = req.body;
 
-  if (!contractAddress || !Array.isArray(tokenIds) || tokenIds.length === 0) {
-    res.status(400).json({ error: 'contractAddress und tokenIds erforderlich' });
-    return;
+  if (!nftContract) {
+    return res.status(400).json({ error: 'nftContract fehlt' });
   }
 
   try {
-    const signerProvider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await signerProvider.getSigner();
-    const winnerContract = new ethers.Contract(winnerContractAddress, winnerContractABI, signer);
+    // Token IDs per Rarible API abrufen
+    const response = await fetch(`https://api.rarible.org/v0.1/items/byCollection?collection=${nftContract}&size=100`);
+    const data = await response.json();
+    const items = data.items || [];
 
-    // jeden Token einzeln speichern
-    const txs = [];
-    for (const tokenId of tokenIds) {
-      const tx = await winnerContract.storeWinner(contractAddress, tokenId);
-      await tx.wait();
-      txs.push(tx.hash);
+    const tokenIds = items.map((item) => parseInt(item.tokenId));
+
+    if (!tokenIds.length) {
+      return res.status(404).json({ error: 'Keine Token-IDs gefunden' });
     }
 
-    res.status(200).json({ message: 'Alle Gewinner gespeichert', txHashes: txs });
-  } catch (error) {
-    console.error('Fehler beim Speichern der Gewinner:', error);
-    res.status(500).json({ error: error.message });
+    // Zufällige Token-ID ziehen (max. 10 Versuche)
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const drawContract = new ethers.Contract(DRAW_CONTRACT_ADDRESS, DRAW_CONTRACT_ABI, signer);
+
+    let selected = null;
+
+    for (let i = 0; i < 10; i++) {
+      const randomId = tokenIds[Math.floor(Math.random() * tokenIds.length)];
+      const alreadyWon = await drawContract.hasAlreadyWon(nftContract, randomId);
+      if (!alreadyWon) {
+        selected = randomId;
+        break;
+      }
+    }
+
+    if (selected === null) {
+      return res.status(400).json({ error: 'Keine ungezogene Token-ID gefunden' });
+    }
+
+    const tx = await drawContract.storeWinner(nftContract, selected);
+    await tx.wait();
+
+    return res.status(200).json({ tokenId: selected, txHash: tx.hash });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 }
